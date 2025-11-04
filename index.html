@@ -20,8 +20,9 @@
         }
         </style>
         <title></title>
-    </head>
+	    </head>
     <body>
+	
         <div id="map">
         </div>
 	
@@ -81,6 +82,16 @@
 		
 		var currentDistance = "5min"; // oletusarvo
 		
+		const serviceTranslations = {
+		"Ravitsemusliikkeet": "Restaurants",
+		"Museot": "Museums",
+		"Hotellit": "Hotels",
+		"Hostellit": "Hostels",
+		"Teatterit": "Theatres",
+		"Elokuvateatterit": "Cinemas",
+		"Apteekit": "Pharmacies"
+	};
+		
 		function showStopServices(stop_id) {
     // Tyhjentää layerit
     layerGroup5.clearLayers();
@@ -93,7 +104,7 @@
 	var showAll = selectedType === "Kaikki";
 
     // Ryhmitelty palvelulista 
-    var serviceListHTML = "<b>Palvelut:</b><br>";
+    var serviceListHTML = "<b>Services:</b><br>";
     var servicesByType = {};
 
     // Valitaan oikea etäisyyslayer
@@ -108,13 +119,15 @@
         if (p.stop_id == stop_id) {
             var tyyppi = p.palvelukoh;
             var nimi = p.kohteen_ni;
-
+			var englishType = serviceTranslations[tyyppi] || tyyppi;
             if (showAll || tyyppi === selectedType) {
-                if (!servicesByType[tyyppi]) servicesByType[tyyppi] = [];
-                servicesByType[tyyppi].push(nimi);
+                if (!servicesByType[englishType]) servicesByType[englishType] = [];
+                servicesByType[englishType].push(nimi);
             }
         }
     });
+
+	
 
     // Rakennetaan HTML-lista
     for (var tyyppi in servicesByType) {
@@ -126,7 +139,7 @@
     }
 
     if (Object.keys(servicesByType).length === 0) {
-        serviceListHTML += "<i>Ei valittuja palveluita tällä alueella.</i>";
+        serviceListHTML += "<i>No selected services in this area.</i>";
     }
 
     document.getElementById("service-list").innerHTML = serviceListHTML;
@@ -166,25 +179,39 @@
 	
 	
         var map = L.map('map', {
-            zoomControl:false, maxZoom:18, minZoom:5
-        }).fitBounds([[60.409475562426806,22.17572543988113],[60.47758379764258,22.368931314547503]]);
+		zoomControl: false,
+		maxZoom: 18,
+		minZoom: 10
+		}).setView([60.4466, 22.3050], 13); // Keskipiste ja zoom-taso
+
+		// Sallittu kartta-alue
+		map.setMaxBounds([
+		[60.25, 21.60],  
+		[60.60, 22.80]   
+		]);
+
+		
         var hash = new L.Hash(map);
         map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
         var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+		
         // remove popup's row if "visible-with-data"
-        function removeEmptyRowsFromPopupContent(content, feature) {
-         var tempDiv = document.createElement('div');
-         tempDiv.innerHTML = content;
-         var rows = tempDiv.querySelectorAll('tr');
-         for (var i = 0; i < rows.length; i++) {
-             var td = rows[i].querySelector('td.visible-with-data');
-             var key = td ? td.id : '';
-             if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
-                 rows[i].parentNode.removeChild(rows[i]);
-             }
-         }
-         return tempDiv.innerHTML;
+	function removeEmptyRowsFromPopupContent(content, feature) {
+    var tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+    var rows = tempDiv.querySelectorAll('tr');
+    for (var i = 0; i < rows.length; i++) {
+        var td = rows[i].querySelector('td.visible-with-data');
+        var key = td ? td.id : '';
+        var value = feature.properties[key];
+
+        // Tarkista null, undefined tai "null"
+        if (value === null || value === undefined || value === "null" || value === "") {
+            rows[i].parentNode.removeChild(rows[i]);
         }
+    }
+    return tempDiv.innerHTML;
+}
         
         function addClassToPopupIfMedia(content, popup) {
             var tempDiv = document.createElement('div');
@@ -231,7 +258,28 @@
             } else {
                 popup._contentNode.classList.remove('media');
             }
+        };
+        var abstract = new L.Control({'position':'bottomleft'});
+        abstract.onAdd = function (map) {
+            this._div = L.DomUtil.create('div',
+            'leaflet-control abstract');
+            this._div.id = 'abstract'
+                this._div.setAttribute("onmouseenter", "abstract.show()");
+                this._div.setAttribute("onmouseleave", "abstract.hide()");
+                this.hide();
+                return this._div;
+            };
+            abstract.hide = function () {
+                this._div.classList.remove("abstractUncollapsed");
+                this._div.classList.add("abstract");
+                this._div.innerHTML = 'i'
+            }
+			abstract.show = function () {
+                this._div.classList.remove("abstract");
+                this._div.classList.add("abstractUncollapsed");
+                this._div.innerHTML = '<br>This interactive web map shows how accessible the services are from the tramstops. You can choose from the dropdown menu on the right if you want to see services within 5-, 10-, or 15-minute walking distance from the chosen tramstop. The walking distances are calculated with 4 kilometers per hour speed. You can also choose if you want to see all services or just hotels or any other kind of services. By clicking any tramstop there will pop-up a list about services around the stop by your selected walking distance. The map will also show you in points where your selected services are. By clicking these points you can get more information about the service. <br /><br />Data Citations: Service point data from Lounaistieto. Available at: https://www.avoindata.fi/data/fi/dataset/varsinais-suomen-ja-satakunnan-palvelupisteet. Digiroads from Finnish Transport Infrastructure Agency. Available at: https://vayla.fi/vaylista/aineistot/digiroad/aineisto/rajapinnat. Tramway and its stops raitiotielinjaus.shp and raitiotielinjaus_pysäkit.shp from Turku city. Available at: https://www.avoindata.fi/data/fi/dataset/turun-raitiotiesuunnitelma. Background map © OpenStreetMap. Available at: https://www.openstreetmap.org. <br/>';
         }
+        abstract.addTo(map);
         var zoomControl = L.control.zoom({
             position: 'topleft'
         }).addTo(map);
@@ -243,7 +291,7 @@
         var layer_OpenStreetMap_0 = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
             pane: 'pane_OpenStreetMap_0',
             opacity: 1.0,
-            attribution: '',
+            attribution: '<a href="https://www.openstreetmap.org/">© OpenStreetMap contributors</a>',
             minZoom: 5,
             maxZoom: 18,
             minNativeZoom: 0,
@@ -254,60 +302,36 @@
         function pop_15MIN_UUSI_1(feature, layer) {
             var popupContent = '<table>\
                     <tr>\
-                        <th scope="row">orig_id</th>\
-                        <td class="visible-with-data" id="orig_id">' + (feature.properties['orig_id'] !== null ? autolinker.link(String(feature.properties['orig_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                    </tr>\
-                    <tr>\
-                        <th scope="row">palvelukoh</th>\
+                        <th scope="row">Service type</th>\
                         <td class="visible-with-data" id="palvelukoh">' + (feature.properties['palvelukoh'] !== null ? autolinker.link(String(feature.properties['palvelukoh']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                     <tr>\
-                        <th scope="row">palvelut</th>\
+                        <th scope="row">Services</th>\
                         <td class="visible-with-data" id="palvelut">' + (feature.properties['palvelut'] !== null ? autolinker.link(String(feature.properties['palvelut']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                     <tr>\
-                        <th scope="row">kohteen_ni</th>\
+                        <th scope="row">Name</th>\
                         <td class="visible-with-data" id="kohteen_ni">' + (feature.properties['kohteen_ni'] !== null ? autolinker.link(String(feature.properties['kohteen_ni']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                     <tr>\
-                        <th scope="row">latitude</th>\
-                        <td class="visible-with-data" id="latitude">' + (feature.properties['latitude'] !== null ? autolinker.link(String(feature.properties['latitude']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                    </tr>\
-                    <tr>\
-                        <th scope="row">longitude</th>\
-                        <td class="visible-with-data" id="longitude">' + (feature.properties['longitude'] !== null ? autolinker.link(String(feature.properties['longitude']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                    </tr>\
-                    <tr>\
-                        <th scope="row">puhelinnum</th>\
+                        <th scope="row">Phone number</th>\
                         <td class="visible-with-data" id="puhelinnum">' + (feature.properties['puhelinnum'] !== null ? autolinker.link(String(feature.properties['puhelinnum']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                     <tr>\
-                        <th scope="row">osoite</th>\
+                        <th scope="row">Addres</th>\
                         <td class="visible-with-data" id="osoite">' + (feature.properties['osoite'] !== null ? autolinker.link(String(feature.properties['osoite']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                     <tr>\
-                        <th scope="row">sahkoposti</th>\
+                        <th scope="row">Email</th>\
                         <td class="visible-with-data" id="sahkoposti">' + (feature.properties['sahkoposti'] !== null ? autolinker.link(String(feature.properties['sahkoposti']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                     <tr>\
-                        <th scope="row">verkkosivu</th>\
+                        <th scope="row">Website</th>\
                         <td class="visible-with-data" id="verkkosivu">' + (feature.properties['verkkosivu'] !== null ? autolinker.link(String(feature.properties['verkkosivu']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                     <tr>\
-                        <th scope="row">aukioloaja</th>\
+                        <th scope="row">Opening hours</th>\
                         <td class="visible-with-data" id="aukioloaja">' + (feature.properties['aukioloaja'] !== null ? autolinker.link(String(feature.properties['aukioloaja']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                    </tr>\
-                    <tr>\
-                        <th scope="row">datalahde</th>\
-                        <td class="visible-with-data" id="datalahde">' + (feature.properties['datalahde'] !== null ? autolinker.link(String(feature.properties['datalahde']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                    </tr>\
-                    <tr>\
-                        <th scope="row">stop_id</th>\
-                        <td class="visible-with-data" id="stop_id">' + (feature.properties['stop_id'] !== null ? autolinker.link(String(feature.properties['stop_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                    </tr>\
-                    <tr>\
-                        <th scope="row">time_min</th>\
-                        <td class="visible-with-data" id="time_min">' + (feature.properties['time_min'] !== null ? autolinker.link(String(feature.properties['time_min']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                 </table>';
             var content = removeEmptyRowsFromPopupContent(popupContent, feature);
@@ -355,60 +379,36 @@
         function pop_10MIN_UUSI_2(feature, layer) {
             var popupContent = '<table>\
                     <tr>\
-                        <th scope="row">orig_id</th>\
-                        <td class="visible-with-data" id="orig_id">' + (feature.properties['orig_id'] !== null ? autolinker.link(String(feature.properties['orig_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                    </tr>\
-                    <tr>\
-                        <th scope="row">palvelukoh</th>\
+                        <th scope="row">Service type</th>\
                         <td class="visible-with-data" id="palvelukoh">' + (feature.properties['palvelukoh'] !== null ? autolinker.link(String(feature.properties['palvelukoh']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                     <tr>\
-                        <th scope="row">palvelut</th>\
+                        <th scope="row">Services</th>\
                         <td class="visible-with-data" id="palvelut">' + (feature.properties['palvelut'] !== null ? autolinker.link(String(feature.properties['palvelut']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                     <tr>\
-                        <th scope="row">kohteen_ni</th>\
+                        <th scope="row">Name</th>\
                         <td class="visible-with-data" id="kohteen_ni">' + (feature.properties['kohteen_ni'] !== null ? autolinker.link(String(feature.properties['kohteen_ni']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                     <tr>\
-                        <th scope="row">latitude</th>\
-                        <td class="visible-with-data" id="latitude">' + (feature.properties['latitude'] !== null ? autolinker.link(String(feature.properties['latitude']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                    </tr>\
-                    <tr>\
-                        <th scope="row">longitude</th>\
-                        <td class="visible-with-data" id="longitude">' + (feature.properties['longitude'] !== null ? autolinker.link(String(feature.properties['longitude']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                    </tr>\
-                    <tr>\
-                        <th scope="row">puhelinnum</th>\
+                        <th scope="row">Phone number</th>\
                         <td class="visible-with-data" id="puhelinnum">' + (feature.properties['puhelinnum'] !== null ? autolinker.link(String(feature.properties['puhelinnum']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                     <tr>\
-                        <th scope="row">osoite</th>\
+                        <th scope="row">Addres</th>\
                         <td class="visible-with-data" id="osoite">' + (feature.properties['osoite'] !== null ? autolinker.link(String(feature.properties['osoite']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                     <tr>\
-                        <th scope="row">sahkoposti</th>\
+                        <th scope="row">Email</th>\
                         <td class="visible-with-data" id="sahkoposti">' + (feature.properties['sahkoposti'] !== null ? autolinker.link(String(feature.properties['sahkoposti']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                     <tr>\
-                        <th scope="row">verkkosivu</th>\
+                        <th scope="row">Website</th>\
                         <td class="visible-with-data" id="verkkosivu">' + (feature.properties['verkkosivu'] !== null ? autolinker.link(String(feature.properties['verkkosivu']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                     <tr>\
-                        <th scope="row">aukioloaja</th>\
+                        <th scope="row">Opening hours</th>\
                         <td class="visible-with-data" id="aukioloaja">' + (feature.properties['aukioloaja'] !== null ? autolinker.link(String(feature.properties['aukioloaja']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                    </tr>\
-                    <tr>\
-                        <th scope="row">datalahde</th>\
-                        <td class="visible-with-data" id="datalahde">' + (feature.properties['datalahde'] !== null ? autolinker.link(String(feature.properties['datalahde']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                    </tr>\
-                    <tr>\
-                        <th scope="row">stop_id</th>\
-                        <td class="visible-with-data" id="stop_id">' + (feature.properties['stop_id'] !== null ? autolinker.link(String(feature.properties['stop_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                    </tr>\
-                    <tr>\
-                        <th scope="row">time_min</th>\
-                        <td class="visible-with-data" id="time_min">' + (feature.properties['time_min'] !== null ? autolinker.link(String(feature.properties['time_min']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                 </table>';
             var content = removeEmptyRowsFromPopupContent(popupContent, feature);
@@ -454,58 +454,39 @@
         });
         bounds_group.addLayer(layer_10MIN_UUSI_2);
         function pop_5MIN_UUSI_3(feature, layer) {
+			var englishType = serviceTranslations[feature.properties['palvelukoh']] || feature.properties['palvelukoh'];
             var popupContent = '<table>\
                     <tr>\
-                        <th scope="row">tyyppi</th>\
-                        <td class="visible-with-data" id="palvelukoh">' + (feature.properties['palvelukoh'] !== null ? autolinker.link(String(feature.properties['palvelukoh']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                        <th scope="row">Service type</th>\
+                        <td class="visible-with-data" id="palvelukoh">' + englishType + '</td>\
                     </tr>\
                     <tr>\
-                        <th scope="row">palvelut</th>\
+                        <th scope="row">Services</th>\
                         <td class="visible-with-data" id="palvelut">' + (feature.properties['palvelut'] !== null ? autolinker.link(String(feature.properties['palvelut']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                     <tr>\
-                        <th scope="row">kohteen_ni</th>\
+                        <th scope="row">Name</th>\
                         <td class="visible-with-data" id="kohteen_ni">' + (feature.properties['kohteen_ni'] !== null ? autolinker.link(String(feature.properties['kohteen_ni']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                     <tr>\
-                        <th scope="row">latitude</th>\
-                        <td class="visible-with-data" id="latitude">' + (feature.properties['latitude'] !== null ? autolinker.link(String(feature.properties['latitude']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                    </tr>\
-                    <tr>\
-                        <th scope="row">longitude</th>\
-                        <td class="visible-with-data" id="longitude">' + (feature.properties['longitude'] !== null ? autolinker.link(String(feature.properties['longitude']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                    </tr>\
-                    <tr>\
-                        <th scope="row">puhelinnum</th>\
+                        <th scope="row">Phone number</th>\
                         <td class="visible-with-data" id="puhelinnum">' + (feature.properties['puhelinnum'] !== null ? autolinker.link(String(feature.properties['puhelinnum']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                     <tr>\
-                        <th scope="row">osoite</th>\
+                        <th scope="row">Addres</th>\
                         <td class="visible-with-data" id="osoite">' + (feature.properties['osoite'] !== null ? autolinker.link(String(feature.properties['osoite']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                     <tr>\
-                        <th scope="row">sahkoposti</th>\
+                        <th scope="row">Email</th>\
                         <td class="visible-with-data" id="sahkoposti">' + (feature.properties['sahkoposti'] !== null ? autolinker.link(String(feature.properties['sahkoposti']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                     <tr>\
-                        <th scope="row">verkkosivu</th>\
+                        <th scope="row">Website</th>\
                         <td class="visible-with-data" id="verkkosivu">' + (feature.properties['verkkosivu'] !== null ? autolinker.link(String(feature.properties['verkkosivu']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                     <tr>\
-                        <th scope="row">aukioloaja</th>\
+                        <th scope="row">Opening hours</th>\
                         <td class="visible-with-data" id="aukioloaja">' + (feature.properties['aukioloaja'] !== null ? autolinker.link(String(feature.properties['aukioloaja']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                    </tr>\
-                    <tr>\
-                        <th scope="row">datalahde</th>\
-                        <td class="visible-with-data" id="datalahde">' + (feature.properties['datalahde'] !== null ? autolinker.link(String(feature.properties['datalahde']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                    </tr>\
-                    <tr>\
-                        <th scope="row">stop_id</th>\
-                        <td class="visible-with-data" id="stop_id">' + (feature.properties['stop_id'] !== null ? autolinker.link(String(feature.properties['stop_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                    </tr>\
-                    <tr>\
-                        <th scope="row">time_min</th>\
-                        <td class="visible-with-data" id="time_min">' + (feature.properties['time_min'] !== null ? autolinker.link(String(feature.properties['time_min']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
                     </tr>\
                 </table>';
             var content = removeEmptyRowsFromPopupContent(popupContent, feature);
@@ -590,8 +571,33 @@
         });
         bounds_group.addLayer(layer_Rautiotie_4);
         map.addLayer(layer_Rautiotie_4);
+		
+		const stopNames = {
+		1: "Satama",
+		2: "Herttuankulma",
+		3: "Vaasanpuisto",
+		4: "Kirstinpuisto",
+		5: "Rautatieasema",
+		6: "Humalistonkatu",
+		7: "Eerikinkatu",
+		8: "Tuomiokirkkotori",
+		9: "Yliopisto",
+		10: "Kupittaan asema",
+		11: "Joukahaisenkatu",
+		12: "Teollisuuskatu",
+		13: "Itäharju",
+		14: "Voimakatu",
+		15: "Laukkavuorenpuisto",
+		16: "Fasaaninpuistikko",
+		17: "Itäkeskus",
+		18: "Karvataskunkatu",
+		19: "Talpiankuja",
+		20: "Kraatarinkatu"
+		};
         function pop_PYSAKKI_5(feature, layer) {
-            layer.bindPopup("Pysäkki: " + feature.properties.stop_id);
+			const id = feature.properties.stop_id;
+			const name = stopNames[id] || ("Stop " + id); // jos nimeä ei löydy, näytetään "Stop X"
+			layer.bindPopup(name);
 		}
 
         function style_PYSAKKI_5_0() {
@@ -631,11 +637,8 @@
         bounds_group.addLayer(layer_PYSAKKI_5);
         map.addLayer(layer_PYSAKKI_5);
         var overlaysTree = [
-            {label: '<img src="legend/PYSAKKI_5.png" /> PYSAKKI', layer: layer_PYSAKKI_5},
-            {label: '<img src="legend/Rautiotie_4.png" /> Rautiotie', layer: layer_Rautiotie_4},
-            {label: '<img src="legend/5MIN_UUSI_3.png" /> 5MIN_UUSI', layer: layer_5MIN_UUSI_3},
-            {label: '<img src="legend/10MIN_UUSI_2.png" /> 10MIN_UUSI', layer: layer_10MIN_UUSI_2},
-            {label: '<img src="legend/15MIN_UUSI_1.png" /> 15MIN_UUSI', layer: layer_15MIN_UUSI_1},
+            {label: '<img src="legend/PYSAKKI_5.png" /> Tram stops', layer: layer_PYSAKKI_5},
+            {label: '<img src="legend/Rautiotie_4.png" /> Tram line', layer: layer_Rautiotie_4},
             {label: "OpenStreetMap", layer: layer_OpenStreetMap_0, radioGroup: 'bm' },]
         var lay = L.control.layers.tree(null, overlaysTree,{
             //namedToggle: true,
@@ -648,6 +651,21 @@
         });
 		
         lay.addTo(map);
+		
+		
+		
+		
+		var title = new L.Control({position: 'bottomleft'});
+        title.onAdd = function (map) {
+           this._div = L.DomUtil.create('div', 'info');
+           this.update();
+           return this._div;
+       };
+       title.update = function () {
+           this._div.innerHTML = '<h2>Turku Tramway Service Area Map</h2><p>Select a tram stop to view nearby services</p>';
+       };
+       title.addTo(map);
+		
         setBounds();
 		
 		
