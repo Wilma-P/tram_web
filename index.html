@@ -177,18 +177,22 @@
     else if (currentDistance === "15min") layerToUse = layer_15MIN_UUSI_1;
 
     // Käydään läpi valitun pysäkin palvelut
-    layerToUse.eachLayer(function(layer) {
-        var p = layer.feature.properties;
-        if (p.stop_id == stop_id) {
-            var tyyppi = p.palvelukoh;
-            var nimi = p.kohteen_ni;
+    layerToUse.eachLayer(function(layer) {
+        var p = layer.feature.properties;
+        if (p.stop_id == stop_id) {
+            var tyyppi = p.palvelukoh;
+            var nimi = p.kohteen_ni;
 			var englishType = serviceTranslations[tyyppi] || tyyppi;
-            if (showAll || tyyppi === selectedType) {
-                if (!servicesByType[englishType]) servicesByType[englishType] = [];
-                servicesByType[englishType].push(nimi);
-            }
-        }
-    });
+			
+			// Vain jos nimi EI ole null tai tyhjä merkkijono, lisätään se listaan
+            if (nimi && nimi !== null && nimi !== "") { 
+                if (showAll || tyyppi === selectedType) {
+                    if (!servicesByType[englishType]) servicesByType[englishType] = [];
+                    servicesByType[englishType].push(nimi);
+                }
+			}
+        }
+    });
 
 	
 
@@ -473,6 +477,9 @@ layer_OpenStreetMap_0.addTo(map);
             layerName: 'layer_15MIN_UUSI_1',
             pane: 'pane_15MIN_UUSI_1',
             onEachFeature: pop_15MIN_UUSI_1,
+			filter: function(feature, layer) { 
+                return feature.properties.kohteen_ni && feature.properties.kohteen_ni.trim() !== ""; 
+            },
             pointToLayer: function(feature, latlng) {
                 var serviceType = serviceTranslations[feature.properties['palvelukoh']] || feature.properties['palvelukoh'];
                 var icon = serviceIcons[serviceType] || L.icon({ // fallback, jos tyyppiä ei löydy
@@ -560,6 +567,9 @@ layer_OpenStreetMap_0.addTo(map);
             layerName: 'layer_10MIN_UUSI_2',
             pane: 'pane_10MIN_UUSI_2',
             onEachFeature: pop_10MIN_UUSI_2,
+			filter: function(feature, layer) { 
+                return feature.properties.kohteen_ni && feature.properties.kohteen_ni.trim() !== ""; 
+            },
             pointToLayer: function(feature, latlng) {
                 var serviceType = serviceTranslations[feature.properties['palvelukoh']] || feature.properties['palvelukoh'];
                 var icon = serviceIcons[serviceType] || L.icon({ // fallback, jos tyyppiä ei löydy
@@ -642,6 +652,9 @@ layer_OpenStreetMap_0.addTo(map);
             layerName: 'layer_5MIN_UUSI_3',
             pane: 'pane_5MIN_UUSI_3',
             onEachFeature: pop_5MIN_UUSI_3,
+			filter: function(feature, layer) { 
+                return feature.properties.kohteen_ni && feature.properties.kohteen_ni.trim() !== ""; 
+            },
             pointToLayer: function(feature, latlng) {
                 var serviceType = serviceTranslations[feature.properties['palvelukoh']] || feature.properties['palvelukoh'];
                 var icon = serviceIcons[serviceType] || L.icon({ // fallback, jos tyyppiä ei löydy
